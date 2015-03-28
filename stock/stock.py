@@ -32,4 +32,4 @@ for file in file_list:
 stock_df = pd.concat(stock_dict, axis=1)
 stock_df.set_index(pd.Series(stock_df.index).map(lambda x: str(x)).map(dateutil.parser.parse), inplace=True)
 
-rm_stock_df = pd.rolling_mean(stock_df, 50)
+rm_stock_df = pd.rolling_mean(stock_df, 50, min_periods=40)
