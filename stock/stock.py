@@ -2,6 +2,8 @@ import pandas as pd
 import os
 import dateutil.parser
 import matplotlib.pyplot as plt
+import statsmodels.api as sm
+
 
 finance = pd.io.excel.read_excel('data/finance.xls')
 finance_columns = pd.Series(['code', 'name', 'price', 'pretax_income_rate', 'net_income_rate', 'net_income', 'EPS', 'BPS', 'ROE', 'long_term_debt', 'total_number_stock', 'PER', 'divident', 'PER_new'])
@@ -30,38 +32,55 @@ for file in file_list:
     stock = pd.read_csv(stock_dir + file,header=None,names=['date','close'], usecols=[0,4])
     stock_dict[file.split('.')[0]] = stock.set_index('date').close
 
-stock_df = pd.concat(stock_dict, axis=1)
-stock_df.set_index(pd.Series(stock_df.index).map(lambda x: str(x)).map(dateutil.parser.parse), inplace=True)
+stock = pd.concat(stock_dict, axis=1)
+stock.set_index(pd.Series(stock.index).map(lambda x: str(x)).map(dateutil.parser.parse), inplace=True)
 
-rmean_stock_df2 = pd.rolling_mean(stock_df, 50, min_periods=40)
-rmean_stock_df = pd.ewma(stock_df, 50, min_periods=40)
 
-rmean_rmax_stock_df = pd.rolling_max(rmean_stock_df, 400, min_periods=320)
 
-rmean_ismax_stock_df = rmean_stock_df == rmean_rmax_stock_df
+_, stock_trend = sm.tsa.filters.hpfilter(stock.fillna(method='bfill').fillna(method='ffill'), 1600)
 
-#rmean_isdec2inc_stock_df = pd.rolling_apply(rmean_stock_df, 3, lambda l: l[0] > l[1] and l[1] < l[2]).applymap(lambda x: True if x == 1 else False)
-rmean_isdec2incinc_stock_df = pd.rolling_apply(rmean_stock_df, 12, lambda x: x[0] > x[1] and x[1] < x[2] and x[2] < x[3] and x[3] < x[4] and x[4] < x[5] and x[5] < x[6] and x[6] < x[7] and x[7] < x[8] and x[8] < x[9] and x[9] < x[10] and x[10] < x[11]).applymap(lambda x: True if x == 1 else False)
+stock_trend_rmax = pd.rolling_max(stock_trend, 400, min_periods=320)
 
-#rmean_isinc2dec_stock_df = pd.rolling_apply(rmean_stock_df, 3, lambda l: l[0] < l[1] and l[1] > l[2]).applymap(lambda x: True if x == 1 else False)
+stock_trend_ismax = stock_trend == stock_trend_rmax
+
+stock_trend_isdec2inc = pd.rolling_apply(stock_trend, 3, lambda x: x[0] > x[1] and x[1] < x[2]).applymap(lambda x: True if x == 1 else False)
+stock_trend_isinc2dec = pd.rolling_apply(stock_trend, 3, lambda x: x[0] < x[1] and x[1] > x[2]).applymap(lambda x: True if x == 1 else False)
 
 def extract_incstock(ord, window):
-    if ord <= 0 or window <= 0 or ord + window > stock_df.index.size:
+    if ord <= 0 or window <= 0 or ord + window > stock.index.size:
         return pd.Series()
-    incinc_bool_table = rmean_isdec2incinc_stock_df[ord:ord+window].any()
+    incinc_bool_table = stock_trend_isdec2inc[ord:ord+window].any()
     incinc_code_array = incinc_bool_table[incinc_bool_table].keys()
     result_code_list = []
     for code in incinc_code_array:
+        #a
+        print(code)
+        #a
+        is_first = True
+        previous_max = None
+        previous_day = None
         for check_ord in range(ord-1,-1,-1):
-            if rmean_ismax_stock_df[code][check_ord]:
-                result_code_list.append(code)
-                break
-            if rmean_isdec2incinc_stock_df[code][check_ord]:
-                break
+            if stock_trend_isinc2dec[code][check_ord+1]:
+                if is_first:
+                    print(stock_trend[code][check_ord])
+                    if stock_trend_ismax[code][check_ord]:
+                        break
+                    else:
+                        previous_max = stock_trend[code][check_ord]
+                        previous_day = stock_trend.index[check_ord]
+                        is_first = False
+                else:
+                    print(stock_trend[code][check_ord])
+                    if stock_trend[code][check_ord] > previous_max:
+                        if stock_trend_ismax[code][check_ord]:
+                            result_code_list.append((code, previous_day, stock_trend_ismax.index[check_ord]))
+                            break
+                        else:
+                            break
     return pd.Series(result_code_list)
 
 def plot_stock(code):
-    stock_df[code].plot()
-    rmean_stock_df[code].plot()
+    stock[code].plot()
+    stock_trend[code].plot()
 
 
