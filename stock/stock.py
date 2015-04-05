@@ -44,8 +44,8 @@ stock_trend_rmax = pd.rolling_max(stock_trend, 400, min_periods=320)
 
 stock_trend_ismax = stock_trend == stock_trend_rmax
 
-stock_trend_isdec2inc = pd.rolling_apply(stock_trend, 3, lambda x: x[0] > x[1] and x[1] < x[2]).applymap(lambda x: True if x == 1 else False)
-stock_trend_isinc2dec = pd.rolling_apply(stock_trend, 3, lambda x: x[0] < x[1] and x[1] > x[2]).applymap(lambda x: True if x == 1 else False)
+stock_trend_isdec2inc = pd.rolling_apply(stock_trend, 11, lambda x: x[0] > x[4] and x[4] > x[5] and x[5] < x[6] and x[6] < x[10]).applymap(lambda x: True if x == 1 else False)
+stock_trend_isinc2dec = pd.rolling_apply(stock_trend, 11, lambda x: x[0] < x[4] and x[4] < x[5] and x[5] > x[6] and x[6] > x[10]).applymap(lambda x: True if x == 1 else False)
 
 def extract_incstock(ord,len):
     result = pd.DataFrame(columns=['code','max','prev','start'])
@@ -65,11 +65,11 @@ def extract_incstock(ord,len):
             if is_first and search_length > len:
                 break
             if is_prepare:
-                if stock_trend_isdec2inc[code][check_ord+1]:
+                if stock_trend_isdec2inc[code][check_ord+5]:
                     start_day = stock_trend.index[check_ord]
                     start_price = stock_trend[code][check_ord]
                     is_prepare = False
-            elif stock_trend_isinc2dec[code][check_ord+1]:
+            elif stock_trend_isinc2dec[code][check_ord+5]:
             #if stock_trend_isinc2dec[code][check_ord+1]:
                 #is_prepare = False
                 if is_first:
@@ -84,6 +84,7 @@ def extract_incstock(ord,len):
                     if stock_trend[code][check_ord] < cup_min:
                         cup_min = stock_trend[code][check_ord]
                     if stock_trend[code][check_ord] > previous_max:
+                    #if stock_trend[code][check_ord] > start_price:
                         if stock_trend_ismax[code][check_ord] and stock_trend[code][ord] < previous_max * 1.05 and start_price > (cup_min + stock_trend[code][check_ord]) / 2:
                             result.loc[result.index.size+1] = [code, stock_trend_ismax.index[check_ord], previous_day, start_day]
                             break
